@@ -129,6 +129,145 @@ trivy image --format cyclonedx -o sbom.cdx.json todo-api:latest
 
 ---
 
+## Publier l'image sur Docker Hub
+
+L'image est versionnée avec deux tags : un tag de version immuable (`v1.0.0`)
+et le tag mobile `latest`.
+
+```bash
+# Se connecter à Docker Hub
+docker login
+
+# Tagger l'image construite localement avec le namespace Docker Hub
+docker tag todo-api:latest <utilisateur>/todo-api:v1.0.0
+docker tag todo-api:latest <utilisateur>/todo-api:latest
+
+# Pousser les deux tags
+docker push <utilisateur>/todo-api:v1.0.0
+docker push <utilisateur>/todo-api:latest
+```
+
+Repository : `https://hub.docker.com/r/<utilisateur>/todo-api`
+
+---
+
+## Déploiement
+
+### 1. Docker (sur un serveur)
+
+```bash
+docker pull <utilisateur>/todo-api:v1.0.0
+
+docker run -d \
+  -p 80:5000 \
+  -e DB_PATH=/data/todos.db \
+  -v todo-data:/data \
+  --restart unless-stopped \
+  --name todo-app <utilisateur>/todo-api:v1.0.0
+```
+
+> `DB_PATH` pointe vers un volume nommé pour persister la base SQLite entre
+> les redémarrages (évite de bind-monter un fichier inexistant).
+
+### 2. Docker Compose
+
+`docker-compose.yml` :
+
+```yaml
+version: '3.8'
+services:
+  todo-api:
+    image: <utilisateur>/todo-api:v1.0.0
+    ports:
+      - "80:5000"            # hote:conteneur (l'app ecoute sur 5000)
+    environment:
+      - DB_PATH=/data/todos.db
+    volumes:
+      - todo-data:/data
+    restart: unless-stopped
+
+volumes:
+  todo-data:
+```
+
+```bash
+docker compose up -d
+```
+
+### 3. Kubernetes
+
+`k8s-deployment.yml` :
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: todo-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: todo-api
+  template:
+    metadata:
+      labels:
+        app: todo-api
+    spec:
+      containers:
+        - name: todo-api
+          image: <utilisateur>/todo-api:v1.0.0
+          ports:
+            - containerPort: 5000
+          env:
+            - name: DB_PATH
+              value: /data/todos.db
+          volumeMounts:
+            - name: todo-data
+              mountPath: /data
+      volumes:
+        - name: todo-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: todo-api
+spec:
+  selector:
+    app: todo-api
+  ports:
+    - port: 80
+      targetPort: 5000
+  type: ClusterIP
+```
+
+```bash
+kubectl apply -f k8s-deployment.yml
+```
+
+> Déploiement actuel : l'application tourne sur **Dokploy** (reverse proxy
+> Traefik), avec le *container port* configuré sur `5000` et HTTPS automatique.
+
+---
+
+## Bonnes pratiques appliquées
+
+- **Tagging** : tag de version immuable (`v1.0.0`) en plus de `latest`, pour
+  garantir des déploiements reproductibles.
+- **Image minimale** : base `python:3.11-alpine` → surface d'attaque réduite et
+  **0 vulnérabilité CRITICAL** (vérifié avec Trivy).
+- **Utilisateur non-root** : le conteneur s'exécute en tant que `appuser`.
+- **`.dockerignore`** : exclut la base de données, les rapports, les SBOM et les
+  fichiers de test → image plus légère et sans données sensibles embarquées.
+- **SBOM** : génération d'un inventaire des composants (SPDX + CycloneDX) pour la
+  traçabilité de la chaîne d'approvisionnement.
+- **Persistance** : base SQLite externalisée via un volume (`DB_PATH`).
+- **Pas de secret dans l'image** : aucune variable sensible (token, mot de passe)
+  n'est intégrée à l'image ni versionnée.
+- **HTTPS** : terminaison TLS assurée par le reverse proxy en production.
+
+---
+
 ## Endpoints de l'API
 
 | Méthode | Endpoint      | Description                    |
