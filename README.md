@@ -1,4 +1,4 @@
-# APP DEPLOYEE ICI : http://efreipipeline-app-aqgcqp-3285cf-51-178-49-242.sslip.io/todos
+# APP DEPLOYEE SECURISEE ICI  : https://efrei-pipeline.quentin-doulcet.fr/todos
 
 # Todo API
 
