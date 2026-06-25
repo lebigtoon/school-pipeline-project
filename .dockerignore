@@ -1,0 +1,16 @@
+env-virutel/
+__pycache__/
+*.db
+.git/
+.gitignore
+.claude/
+.pytest_cache/
+
+trivy-report.json
+trivy-report.txt
+sbom.spdx.json
+sbom.cdx.json
+
+screens/
+README.md
+Dockerfile
